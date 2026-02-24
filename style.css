@@ -1,0 +1,112 @@
+:root {
+  --c-bg: #302f2c;
+  --c-fg: #F3F3E8;
+  --c-mid: #707067;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+  background-color: var(--c-bg);
+  color: var(--c-fg);
+  overflow-x: hidden;
+  font-family: Arial, sans-serif;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  cursor: pointer;
+  color: var(--c-bg);
+  background-color: var(--c-fg);
+  font-size: 1em;
+  width: 2em;
+  border-radius: 0.125em;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#app {
+  height: 100vh;
+  width: 100vw;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  /* Hide scrollbar */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#app::-webkit-scrollbar {
+    display: none;
+}
+
+.slide {
+  height: 100vh;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.emoji {
+  text-shadow: 0 0 3px var(--c-fg), 0 0 3px var(--c-fg), 0 0 3px var(--c-fg);
+}
+
+.big {
+  font-size: 30vmin;
+}
+
+.slots {
+  margin-bottom: 0.25em;
+}
+
+.slots .emoji {
+  display: inline-block;
+  font-size: 0.25em;
+  opacity: 0.25;
+  margin: 0 0.2em;
+}
+
+.slots .emoji.filled {
+  opacity: 1;
+}
+
+.slot-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.1em;
+}
+
+.home {
+  font-size: 4em;
+  text-align: center;
+}
+
+.home h4 {
+  color: #707067;
+}
+
+.cta {
+  margin: 1em 0px;
+}
+
+.hud {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1;
+  font-size: 5vmin;
+  text-shadow: 0 0 3px #222, 0 0 5px #222, 0 0 20px #555;
+}

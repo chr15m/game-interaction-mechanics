@@ -98,6 +98,67 @@
       (when (> count 1)
         [:div {:class "badge"} count])])])
 
+(defn component:buy-slide [emoji]
+  ^{:key emoji}
+  [:section {:class "slide big"}
+   [:div {:class "slots"}
+    (let [slots-vec (get-in @state [:slots emoji])
+          slots-per-row 5
+          rows (partition-all slots-per-row slots-vec)]
+      (map-indexed
+       (fn [row-idx row]
+         [:div {:class "slot-row" :key row-idx}
+          (let [row-vec (vec row)
+                n (count row-vec)
+                middle (/ (dec n) 2.0)]
+            (map-indexed
+             (fn [col-idx slot]
+               (let [dist (js/Math.abs (- col-idx middle))
+                     y-offset (* dist dist 0.2)
+                     style {:transform (str "translateY(" y-offset "em)")}]
+                 (if slot
+                   [:span
+                    {:class "emoji filled" :style style :key col-idx}
+                    "🪙"]
+                   [:span
+                    {:class "emoji" :style style :key col-idx}
+                    "⚪"])))
+             row-vec))])
+       rows))]
+   [:div {:style {:cursor "pointer"}
+          :on-click #(handle-click emoji)}
+    [e emoji]]])
+
+(defn component:catch-slide [game-id display-emoji reward-emoji]
+  (let [game (get-in @state [:catch-games game-id])]
+    ^{:key game-id}
+    [:section {:class "slide big"}
+     [:div {:class "catch-container"
+            :on-mouse-down #(handle-catch game-id reward-emoji)
+            :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji))}
+      [:div {:class "catch-target"
+             :style {:left (str (:target-start game) "%")
+                     :width (str (:target-width game) "%")}}]
+      [:div {:class "catch-indicator"
+             :style {:left (str (:pos game) "%")}}]]
+     [:div {:style {:cursor "pointer"}
+            :on-mouse-down #(handle-catch game-id reward-emoji)
+            :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji))}
+      [e display-emoji]]]))
+
+(defn component:tree-slide []
+  ^{:key "tree"}
+  [:section {:class "slide big"}
+   [:div {:class "progress-container"}
+    [:div {:class "progress-bar" :style {:width (str (:tree-progress @state) "%")}}]]
+   [:div {:style {:cursor "pointer"}
+          :on-mouse-down start-chopping
+          :on-mouse-up stop-chopping
+          :on-mouse-leave stop-chopping
+          :on-touch-start (fn [ev] (.preventDefault ev) (start-chopping))
+          :on-touch-end stop-chopping}
+    [e (if (>= (:tree-progress @state) 100) "🪵" "🌳")]]])
+
 (defn component:app [_state]
   [:<>
    [component:hud]
@@ -110,72 +171,13 @@
        [:button {:class "cta"
                  :on-click #(swap! state assoc :started true)}
         [e "▶"]]]]
-     (let [buy-slide
-           (fn [emoji]
-             ^{:key emoji}
-             [:section {:class "slide big"}
-              [:div {:class "slots"}
-               (let [slots-vec (get-in @state [:slots emoji])
-                     slots-per-row 5
-                     rows (partition-all slots-per-row slots-vec)]
-                 (map-indexed
-                  (fn [row-idx row]
-                    [:div {:class "slot-row" :key row-idx}
-                     (let [row-vec (vec row)
-                           n (count row-vec)
-                           middle (/ (dec n) 2.0)]
-                       (map-indexed
-                        (fn [col-idx slot]
-                          (let [dist (js/Math.abs (- col-idx middle))
-                                y-offset (* dist dist 0.2)
-                                style {:transform (str "translateY(" y-offset "em)")}]
-                            (if slot
-                              [:span
-                               {:class "emoji filled" :style style :key col-idx}
-                               "🪙"]
-                              [:span
-                               {:class "emoji" :style style :key col-idx}
-                               "⚪"])))
-                        row-vec))])
-                  rows))]
-              [:div {:style {:cursor "pointer"}
-                     :on-click #(handle-click emoji)}
-               [e emoji]]])
-
-           catch-slide
-           (fn [game-id display-emoji reward-emoji]
-             (let [game (get-in @state [:catch-games game-id])]
-               ^{:key game-id}
-               [:section {:class "slide big"}
-                [:div {:class "catch-container"
-                       :on-mouse-down #(handle-catch game-id reward-emoji)
-                       :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji))}
-                 [:div {:class "catch-target"
-                        :style {:left (str (:target-start game) "%")
-                                :width (str (:target-width game) "%")}}]
-                 [:div {:class "catch-indicator"
-                        :style {:left (str (:pos game) "%")}}]]
-                [:div {:style {:cursor "pointer"}
-                       :on-mouse-down #(handle-catch game-id reward-emoji)
-                       :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji))}
-                 [e display-emoji]]]))]
-       [:<>
-        (buy-slide "🥔")
-        ^{:key "tree"}
-        [:section {:class "slide big"}
-         [:div {:class "progress-container"}
-          [:div {:class "progress-bar" :style {:width (str (:tree-progress @state) "%")}}]]
-         [:div {:style {:cursor "pointer"}
-                :on-mouse-down start-chopping
-                :on-mouse-up stop-chopping
-                :on-mouse-leave stop-chopping
-                :on-touch-start (fn [ev] (.preventDefault ev) (start-chopping))
-                :on-touch-end stop-chopping}
-          [e (if (>= (:tree-progress @state) 100) "🪵" "🌳")]]]
-        (buy-slide "🥕")
-        (catch-slide :fishing "🎣" "🐟")
-        (buy-slide "🍅")
-        (catch-slide :hunting "🐗" "🍗")]))])
+     [:<>
+      [component:buy-slide "🥔"]
+      [component:tree-slide]
+      [component:buy-slide "🥕"]
+      [component:catch-slide :fishing "🎣" "🐟"]
+      [component:buy-slide "🍅"]
+      [component:catch-slide :hunting "🐗" "🍗"]])])
 
 (rdom/render [component:app state]
           (.getElementById js/document "app"))

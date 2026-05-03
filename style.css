@@ -82,6 +82,21 @@ button {
   opacity: 1;
 }
 
+.progress-container {
+  width: 50vmin;
+  height: 2vmin;
+  background-color: var(--c-mid);
+  border-radius: 1vmin;
+  margin-bottom: 0.5em;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background-color: var(--c-fg);
+  width: 0%;
+}
+
 .slot-row {
   display: flex;
   align-items: center;

@@ -97,6 +97,30 @@ button {
   width: 0%;
 }
 
+.catch-container {
+  width: 50vmin;
+  height: 4vmin;
+  background-color: var(--c-mid);
+  border-radius: 2vmin;
+  margin-bottom: 0.5em;
+  position: relative;
+  overflow: hidden;
+}
+
+.catch-target {
+  position: absolute;
+  height: 100%;
+  background-color: rgba(243, 243, 232, 0.3);
+}
+
+.catch-indicator {
+  position: absolute;
+  height: 100%;
+  width: 1vmin;
+  background-color: var(--c-fg);
+  transform: translateX(-50%);
+}
+
 .slot-row {
   display: flex;
   align-items: center;

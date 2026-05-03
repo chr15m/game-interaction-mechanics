@@ -6,13 +6,32 @@
 (def state
   (r/atom
     {:coins 99
-     :inventory {"🥔" 0 "🪵" 0 "🥕" 0 "🍅" 0}
+     :inventory {"🥔" 0 "🪵" 0 "🥕" 0 "🍅" 0 "🐟" 0 "🍗" 0}
      :slots {"🥔" [nil nil nil]
              "🥕" [nil nil nil nil nil]
              "🍅" [nil nil nil nil nil nil nil]}
-     :tree-progress 0}))
+     :tree-progress 0
+     :catch-games {:fishing {:pos 0 :dir 1 :target-start 40 :target-width 20 :speed 1.5}
+                   :hunting {:pos 50 :dir -1 :target-start 70 :target-width 15 :speed 2.5}}}))
 
 (def hold-interval (atom nil))
+
+(def animation-interval
+  (js/setInterval
+   (fn []
+     (swap! state update :catch-games
+            (fn [games]
+              (reduce-kv
+               (fn [m k v]
+                 (let [new-pos (+ (:pos v) (* (:dir v) (:speed v)))
+                       [final-pos final-dir]
+                       (cond
+                         (>= new-pos 100) [100 -1]
+                         (<= new-pos 0) [0 1]
+                         :else [new-pos (:dir v)])]
+                   (assoc m k (assoc v :pos final-pos :dir final-dir))))
+               {} games))))
+   20))
 
 (js/console.log @state)
 
@@ -38,6 +57,14 @@
   (when (>= (:tree-progress @state) 100)
     (swap! state update-in [:inventory "🪵"] inc))
   (swap! state assoc :tree-progress 0))
+
+(defn handle-catch [game-id reward-emoji]
+  (let [game (get-in @state [:catch-games game-id])
+        pos (:pos game)
+        start (:target-start game)
+        end (+ start (:target-width game))]
+    (when (and (>= pos start) (<= pos end))
+      (swap! state update-in [:inventory reward-emoji] inc))))
 
 (defn handle-click [emoji]
   (swap! state
@@ -113,7 +140,25 @@
                   rows))]
               [:div {:style {:cursor "pointer"}
                      :on-click #(handle-click emoji)}
-               [e emoji]]])]
+               [e emoji]]])
+
+           catch-slide
+           (fn [game-id display-emoji reward-emoji]
+             (let [game (get-in @state [:catch-games game-id])]
+               ^{:key game-id}
+               [:section {:class "slide big"}
+                [:div {:class "catch-container"
+                       :on-mouse-down #(handle-catch game-id reward-emoji)
+                       :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji))}
+                 [:div {:class "catch-target"
+                        :style {:left (str (:target-start game) "%")
+                                :width (str (:target-width game) "%")}}]
+                 [:div {:class "catch-indicator"
+                        :style {:left (str (:pos game) "%")}}]]
+                [:div {:style {:cursor "pointer"}
+                       :on-mouse-down #(handle-catch game-id reward-emoji)
+                       :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji))}
+                 [e display-emoji]]]))]
        [:<>
         (buy-slide "🥔")
         ^{:key "tree"}
@@ -128,7 +173,9 @@
                 :on-touch-end stop-chopping}
           [e (if (>= (:tree-progress @state) 100) "🪵" "🌳")]]]
         (buy-slide "🥕")
-        (buy-slide "🍅")]))])
+        (catch-slide :fishing "🎣" "🐟")
+        (buy-slide "🍅")
+        (catch-slide :hunting "🐗" "🍗")]))])
 
 (rdom/render [component:app state]
           (.getElementById js/document "app"))

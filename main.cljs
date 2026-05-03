@@ -6,12 +6,10 @@
 (def state
   (r/atom
     {:coins 99
-     :slots {"🐈‍⬛" [nil]
-             "🥔" [nil nil nil]
+     :inventory {"🥔" 0 "🥕" 0 "🍅" 0}
+     :slots {"🥔" [nil nil nil]
              "🥕" [nil nil nil nil nil]
-             "🍅" [nil nil nil nil nil nil nil]
-             "🐇" [nil nil nil nil nil nil nil nil nil]
-             "🌳" [nil nil nil nil nil nil nil nil nil nil nil nil]}}))
+             "🍅" [nil nil nil nil nil nil nil]}}))
 
 (js/console.log @state)
 
@@ -24,29 +22,48 @@
            (let [coins (:coins current-state)
                  slots (get-in current-state [:slots emoji])]
              (if (and (> coins 0) (some nil? slots))
-               (let [slot-index (.indexOf slots nil)]
-                 (-> current-state
-                     (update :coins dec)
-                     (assoc-in [:slots emoji slot-index] "🪙")))
+               (let [slot-index (.indexOf slots nil)
+                     new-slots (assoc slots slot-index "🪙")
+                     is-full? (not (some nil? new-slots))]
+                 (if is-full?
+                   (-> current-state
+                       (update :coins dec)
+                       (update-in [:inventory emoji] (fnil inc 0))
+                       (assoc-in [:slots emoji] (vec (repeat (count slots) nil))))
+                   (-> current-state
+                       (update :coins dec)
+                       (assoc-in [:slots emoji] new-slots))))
                current-state)))))
 
 (defn component:hud []
   [:div {:class "hud"} "🪙 " (:coins @state)])
 
+(defn component:inventory []
+  [:div {:class "inventory-hud"}
+   (for [[item count] (:inventory @state)
+         :when (> count 0)]
+     ^{:key item}
+     [:div {:class "inventory-item"}
+      [e item]
+      (when (> count 1)
+        [:div {:class "badge"} count])])])
+
 (defn component:app [_state]
   [:<>
    [component:hud]
-   (if (:started @state)
+   [component:inventory]
+   (if-not (:started @state)
      [:section {:class "slide home"}
-      [:h1 [e "🐈‍⬛"]]
-      [:h2 "kuro neko"]
-      [:h4 "黒猫"]
+      [:h1 [e "🥔"]]
+      [:h2 "Harvest"]
       [:p
        [:button {:class "cta"
                  :on-click #(swap! state assoc :started true)}
         [e "▶"]]]]
-     (for [emoji (keys (:slots @state))]
-       [:section {:class "slide big"}
+     [:<>
+      (for [emoji (keys (:slots @state))]
+        ^{:key emoji}
+        [:section {:class "slide big"}
         [:div {:class "slots"}
          (let [slots-vec (get-in @state [:slots emoji])
                slots-per-row 5
@@ -73,7 +90,7 @@
             rows))]
         [:div {:style {:cursor "pointer"}
                :on-click #(handle-click emoji)}
-         [e emoji]]]))])
+         [e emoji]]])])])
 
 (rdom/render [component:app state]
           (.getElementById js/document "app"))

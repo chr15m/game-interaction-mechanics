@@ -110,3 +110,35 @@ button {
   font-size: 5vmin;
   text-shadow: 0 0 3px #222, 0 0 5px #222, 0 0 20px #555;
 }
+
+.inventory-hud {
+  position: fixed;
+  bottom: 20px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  z-index: 1;
+}
+
+.inventory-item {
+  position: relative;
+  font-size: 6vmin;
+}
+
+.badge {
+  position: absolute;
+  bottom: -5px;
+  right: -5px;
+  background-color: var(--c-fg);
+  color: var(--c-bg);
+  font-size: 0.4em;
+  border-radius: 50%;
+  width: 1.5em;
+  height: 1.5em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}

@@ -6,11 +6,12 @@
 (def state
   (r/atom
     {:coins 99
-     :inventory {"🥔" 0 "🪵" 0 "🥕" 0 "🍅" 0 "🐟" 0 "🍗" 0}
+     :inventory {"🥔" 0 "🪵" 0 "💎" 0 "🥕" 0 "🍅" 0 "🐟" 0 "🍗" 0}
      :slots {"🥔" [nil nil nil]
              "🥕" [nil nil nil nil nil]
              "🍅" [nil nil nil nil nil nil nil]}
      :tree-progress 0
+     :rock-progress 0
      :catch-games {:fishing {:pos 0 :dir 1 :target-start 40 :target-width 20 :speed 1.5}
                    :hunting {:pos 50 :dir -1 :target-start 70 :target-width 15 :speed 2.5}}
      :cooldowns {}}))
@@ -51,26 +52,26 @@
 (defn e [c]
   [:span {:class "emoji"} c])
 
-(defn start-chopping []
-  (when-not (or @hold-interval (get-in @state [:cooldowns "tree"]))
+(defn start-gathering [id progress-key]
+  (when-not (or @hold-interval (get-in @state [:cooldowns id]))
     (reset! hold-interval
             (js/setInterval
              (fn []
-               (swap! state update :tree-progress
+               (swap! state update progress-key
                       (fn [p]
                         (if (>= p 100)
                           100
                           (+ p 2)))))
              20))))
 
-(defn stop-chopping []
+(defn stop-gathering [id progress-key reward-emoji]
   (when @hold-interval
     (js/clearInterval @hold-interval)
     (reset! hold-interval nil))
-  (when (>= (:tree-progress @state) 100)
-    (swap! state update-in [:inventory "🪵"] inc)
-    (swap! state assoc-in [:cooldowns "tree"] 100))
-  (swap! state assoc :tree-progress 0))
+  (when (>= (get @state progress-key) 100)
+    (swap! state update-in [:inventory reward-emoji] inc)
+    (swap! state assoc-in [:cooldowns id] 100))
+  (swap! state assoc progress-key 0))
 
 (defn handle-catch [game-id reward-emoji]
   (let [game (get-in @state [:catch-games game-id])
@@ -188,21 +189,21 @@
                :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji))}
          [e display-emoji]]])]))
 
-(defn component:tree-slide []
-  ^{:key "tree"}
+(defn component:gather-slide [id progress-key base-emoji reward-emoji]
+  ^{:key id}
   [:section {:class "slide big"}
-   (if (get-in @state [:cooldowns "tree"])
-     [component:cooldown-indicator "tree" "🌳"]
+   (if (get-in @state [:cooldowns id])
+     [component:cooldown-indicator id base-emoji]
      [:<>
       [:div {:class "progress-container"}
-       [:div {:class "progress-bar" :style {:width (str (:tree-progress @state) "%")}}]]
+       [:div {:class "progress-bar" :style {:width (str (get @state progress-key) "%")}}]]
       [:div {:style {:cursor "pointer"}
-             :on-mouse-down start-chopping
-             :on-mouse-up stop-chopping
-             :on-mouse-leave stop-chopping
-             :on-touch-start (fn [ev] (.preventDefault ev) (start-chopping))
-             :on-touch-end stop-chopping}
-       [e (if (>= (:tree-progress @state) 100) "🪵" "🌳")]]])])
+             :on-mouse-down #(start-gathering id progress-key)
+             :on-mouse-up #(stop-gathering id progress-key reward-emoji)
+             :on-mouse-leave #(stop-gathering id progress-key reward-emoji)
+             :on-touch-start (fn [ev] (.preventDefault ev) (start-gathering id progress-key))
+             :on-touch-end #(stop-gathering id progress-key reward-emoji)}
+       [e (if (>= (get @state progress-key) 100) reward-emoji base-emoji)]]])])
 
 (defn component:app [_state]
   [:<>
@@ -218,11 +219,12 @@
         [e "▶"]]]]
      [:<>
       [component:buy-slide "🥔"]
-      [component:tree-slide]
-      [component:buy-slide "🥕"]
+      [component:gather-slide "tree" :tree-progress "🌳" "🪵"]
       [component:catch-slide :fishing "🎣" "🐟"]
-      [component:buy-slide "🍅"]
+      [component:buy-slide "🥕"]
+      [component:gather-slide "rock" :rock-progress "🪨" "💎"]
       [component:catch-slide :hunting "🐗" "🍗"]])])
+      [component:buy-slide "🍅"]
 
 (rdom/render [component:app state]
           (.getElementById js/document "app"))

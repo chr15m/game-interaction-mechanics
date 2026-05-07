@@ -190,3 +190,30 @@ button {
   pointer-events: none;
   transform: rotate(-90deg);
 }
+
+@media (min-width: 768px) {
+  #app {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    scroll-snap-type: none;
+  }
+  .slide {
+    height: 50vh;
+    scroll-snap-align: none;
+  }
+  .slide.home {
+    grid-column: 1 / -1;
+    height: 100vh;
+  }
+  .big {
+    font-size: 15vmin;
+  }
+  .progress-container,
+  .catch-container {
+    width: 25vmin;
+  }
+  .circular-progress {
+    width: 4.375vmin;
+    height: 4.375vmin;
+  }
+}

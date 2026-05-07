@@ -211,12 +211,11 @@
    [component:inventory]
    (if-not (:started @state)
      [:section {:class "slide home"}
-      [:h1 [e "🥔"]]
-      [:h2 "Harvest"]
+      [:h1 [e "👇️"]]
       [:p
        [:button {:class "cta"
                  :on-click #(swap! state assoc :started true)}
-        [e "▶"]]]]
+        [e "🎮️"]]]]
      [:<>
       [component:buy-slide "🥔"]
       [component:gather-slide "tree" :tree-progress "🌳" "🪵"]

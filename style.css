@@ -140,6 +140,8 @@ button {
 
 .cta {
   margin: 1em 0px;
+  border: none;
+  background: transparent;
 }
 
 .hud {

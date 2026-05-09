@@ -217,7 +217,8 @@ button {
   transform: rotate(-90deg);
 }
 
-.flying-coins-layer {
+.flying-coins-layer,
+.flying-items-layer {
   position: fixed;
   top: 0;
   left: 0;
@@ -232,6 +233,16 @@ button {
   z-index: 100;
   margin-left: -2.5vmin;
   margin-top: -2.5vmin;
+  text-shadow: 0 0 5px rgba(0,0,0,0.5);
+}
+
+.flying-item {
+  position: fixed;
+  font-size: 3vmin;
+  pointer-events: none;
+  z-index: 100;
+  margin-left: -1.5vmin;
+  margin-top: -1.5vmin;
   text-shadow: 0 0 5px rgba(0,0,0,0.5);
 }
 

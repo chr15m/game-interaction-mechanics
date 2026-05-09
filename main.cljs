@@ -16,6 +16,7 @@
                    :hunting {:pos 50 :dir -1 :target-start 70 :target-width 15 :speed 2.5}}
      :cooldowns {}
      :flying-coins {}
+     :flying-items {}
      :ghosts {}
      :last-click {}}))
 
@@ -69,6 +70,45 @@
                           (+ p speed)))))
              20))))
 
+(defn get-event-coords [ev fallback-id]
+  (let [cx (when ev
+             (or (.-clientX ev)
+                 (when (and (.-changedTouches ev) (> (.-length (.-changedTouches ev)) 0))
+                   (.-clientX (aget (.-changedTouches ev) 0)))
+                 (when (and (.-touches ev) (> (.-length (.-touches ev)) 0))
+                   (.-clientX (aget (.-touches ev) 0)))))
+        cy (when ev
+             (or (.-clientY ev)
+                 (when (and (.-changedTouches ev) (> (.-length (.-changedTouches ev)) 0))
+                   (.-clientY (aget (.-changedTouches ev) 0)))
+                 (when (and (.-touches ev) (> (.-length (.-touches ev)) 0))
+                   (.-clientY (aget (.-touches ev) 0)))))]
+    (if (and cx cy)
+      [cx cy]
+      (let [el (when fallback-id (js/document.getElementById fallback-id))
+            rect (when el (.getBoundingClientRect el))]
+        (if rect
+          [(+ (.-left rect) (/ (.-width rect) 2)) (+ (.-top rect) (/ (.-height rect) 2))]
+          [(/ (.-innerWidth js/window) 2) (/ (.-innerHeight js/window) 2)])))))
+
+(defn animate-item! [sx sy emoji cb]
+  (let [id (str (js/Math.random))]
+    (swap! state assoc-in [:flying-items id] {:x sx :y sy :tx sx :ty sy :emoji emoji :duration 0.5})
+    (js/requestAnimationFrame
+     (fn []
+       (js/requestAnimationFrame
+        (fn []
+          (let [dest-el (js/document.getElementById (str "inventory-" emoji))
+                rect (when dest-el (.getBoundingClientRect dest-el))
+                ex (if rect (+ (.-left rect) (/ (.-width rect) 2)) (/ (.-innerWidth js/window) 2))
+                ey (if rect (+ (.-top rect) (/ (.-height rect) 2)) (.-innerHeight js/window))]
+            (swap! state update-in [:flying-items id] assoc :tx ex :ty ey))))))
+    (js/setTimeout
+     (fn []
+       (swap! state update :flying-items dissoc id)
+       (when cb (cb)))
+     500)))
+
 (defn spawn-ghost! [el-id emoji]
   (let [el (js/document.getElementById el-id)
         rect (when el (.getBoundingClientRect el))
@@ -78,20 +118,21 @@
     (swap! state assoc-in [:ghosts id] {:x cx :y cy :emoji emoji})
     (js/setTimeout #(swap! state update :ghosts dissoc id) 2000)))
 
-(defn stop-gathering [id progress-key reward-emoji cooldown-time]
+(defn stop-gathering [ev id progress-key reward-emoji cooldown-time]
   (when @hold-interval
     (js/clearInterval @hold-interval)
     (reset! hold-interval nil))
   (let [progress (get @state progress-key)]
     (when (> progress 0)
       (if (>= progress 100)
-        (do
+        (let [[cx cy] (get-event-coords ev (str "progress-" id))]
           (swap! state update-in [:inventory reward-emoji] inc)
-          (swap! state assoc-in [:cooldowns id] {:current cooldown-time :max cooldown-time}))
+          (swap! state assoc-in [:cooldowns id] {:current cooldown-time :max cooldown-time})
+          (animate-item! cx cy reward-emoji nil))
         (spawn-ghost! (str "progress-" id) reward-emoji))))
   (swap! state assoc progress-key 0))
 
-(defn handle-catch [game-id reward-emoji cooldown-time]
+(defn handle-catch [ev game-id reward-emoji cooldown-time]
   (let [game (get-in @state [:catch-games game-id])
         pos (:pos game)
         start (:target-start game)
@@ -99,7 +140,9 @@
         on-cooldown? (get-in @state [:cooldowns game-id])]
     (when-not on-cooldown?
       (if (and (>= pos start) (<= pos end))
-        (swap! state update-in [:inventory reward-emoji] inc)
+        (let [[cx cy] (get-event-coords ev (str "catch-" (name game-id)))]
+          (swap! state update-in [:inventory reward-emoji] inc)
+          (animate-item! cx cy reward-emoji nil))
         (spawn-ghost! (str "catch-" (name game-id)) reward-emoji))
       (swap! state assoc-in [:cooldowns game-id] {:current cooldown-time :max cooldown-time}))))
 
@@ -157,8 +200,7 @@
         coins (:coins current-state)
         slots (get-in current-state [:slots emoji])
         on-cooldown? (get-in current-state [:cooldowns emoji])
-        cx (or (.-clientX ev) (when (.-touches ev) (.-clientX (aget (.-touches ev) 0))) (/ (.-innerWidth js/window) 2))
-        cy (or (.-clientY ev) (when (.-touches ev) (.-clientY (aget (.-touches ev) 0))) (/ (.-innerHeight js/window) 2))]
+        [cx cy] (get-event-coords ev (str "slots-" emoji))]
     (swap! state assoc-in [:last-click emoji] {:x cx :y cy})
     (when (and (> coins 0) (some nil? slots) (not on-cooldown?))
       (let [slot-index (.indexOf slots nil)
@@ -188,7 +230,12 @@
                                (-> s
                                    (update-in [:inventory emoji] (fnil inc 0))
                                    (assoc-in [:slots emoji] (vec (repeat (count curr-slots) nil)))
-                                   (assoc-in [:cooldowns emoji] {:current cooldown-time :max cooldown-time})))))
+                                   (assoc-in [:cooldowns emoji] {:current cooldown-time :max cooldown-time}))))
+                      (let [slots-el (js/document.getElementById (str "slots-" emoji))
+                            s-rect (when slots-el (.getBoundingClientRect slots-el))
+                            sx (if s-rect (+ (.-left s-rect) (/ (.-width s-rect) 2)) cx)
+                            sy (if s-rect (+ (.-top s-rect) (/ (.-height s-rect) 2)) cy)]
+                        (animate-item! sx sy emoji nil)))
                     (do
                       (set-slot-timeout emoji)
                       (swap! state assoc-in [:slots emoji] new-slots))))))))))))
@@ -201,7 +248,7 @@
    (for [[item count] (:inventory @state)
          :when (> count 0)]
      ^{:key item}
-     [:div {:class "inventory-item"}
+     [:div {:class "inventory-item" :id (str "inventory-" item)}
       [e item]
       (when (> count 1)
         [:div {:class "badge"} count])])])
@@ -273,16 +320,16 @@
           [e "👇"]]
          [:div {:class "catch-container"
                 :id (str "catch-" (name game-id))
-                :on-mouse-down #(handle-catch game-id reward-emoji cooldown-time)
-                :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji cooldown-time))}
+                :on-mouse-down #(handle-catch % game-id reward-emoji cooldown-time)
+                :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch ev game-id reward-emoji cooldown-time))}
           [:div {:class "catch-target"
                  :style {:left (str (:target-start game) "%")
                          :width (str (:target-width game) "%")}}]
           [:div {:class "catch-indicator"
                  :style {:left (str (:pos game) "%")}}]]]
         [:div {:style {:cursor "pointer"}
-               :on-mouse-down #(handle-catch game-id reward-emoji cooldown-time)
-               :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji cooldown-time))}
+               :on-mouse-down #(handle-catch % game-id reward-emoji cooldown-time)
+               :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch ev game-id reward-emoji cooldown-time))}
          [e display-emoji]]])]))
 
 (defn component:gather-slide [id progress-key base-emoji reward-emoji speed cooldown-time]
@@ -295,10 +342,10 @@
        [:div {:class "progress-bar" :style {:width (str (get @state progress-key) "%")}}]]
       [:div {:style {:cursor "pointer"}
              :on-mouse-down #(start-gathering id progress-key speed)
-             :on-mouse-up #(stop-gathering id progress-key reward-emoji cooldown-time)
-             :on-mouse-leave #(stop-gathering id progress-key reward-emoji cooldown-time)
+             :on-mouse-up #(stop-gathering % id progress-key reward-emoji cooldown-time)
+             :on-mouse-leave #(stop-gathering % id progress-key reward-emoji cooldown-time)
              :on-touch-start (fn [ev] (.preventDefault ev) (start-gathering id progress-key speed))
-             :on-touch-end #(stop-gathering id progress-key reward-emoji cooldown-time)}
+             :on-touch-end #(stop-gathering % id progress-key reward-emoji cooldown-time)}
        [e (if (>= (get @state progress-key) 100) reward-emoji base-emoji)]]])])
 
 (defn component:flying-coins []
@@ -312,6 +359,17 @@
                     :transform (str "translate(" (- (:tx coin) (:x coin)) "px, " (- (:ty coin) (:y coin)) "px)")}}
       "🪙"])])
 
+(defn component:flying-items []
+  [:div {:class "flying-items-layer"}
+   (for [[id item] (:flying-items @state)]
+     ^{:key id}
+     [:div {:class "flying-item"
+            :style {:left (str (:x item) "px")
+                    :top (str (:y item) "px")
+                    :transition (str "transform " (:duration item) "s ease-in")
+                    :transform (str "translate(" (- (:tx item) (:x item)) "px, " (- (:ty item) (:y item)) "px)")}}
+      [e (:emoji item)]])])
+
 (defn component:ghosts []
   [:div {:class "ghost-layer"}
    (for [[id ghost] (:ghosts @state)]
@@ -324,6 +382,7 @@
 (defn component:app [_state]
   [:<>
    [component:ghosts]
+   [component:flying-items]
    [component:flying-coins]
    [component:hud]
    [component:inventory]

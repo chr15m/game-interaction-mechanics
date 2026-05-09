@@ -57,7 +57,7 @@
 (defn e [c]
   [:span {:class "emoji"} c])
 
-(defn start-gathering [id progress-key]
+(defn start-gathering [id progress-key speed]
   (when-not (or @hold-interval (get-in @state [:cooldowns id]))
     (reset! hold-interval
             (js/setInterval
@@ -66,7 +66,7 @@
                       (fn [p]
                         (if (>= p 100)
                           100
-                          (+ p 2)))))
+                          (+ p speed)))))
              20))))
 
 (defn stop-gathering [id progress-key reward-emoji]
@@ -198,7 +198,7 @@
                :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji))}
          [e display-emoji]]])]))
 
-(defn component:gather-slide [id progress-key base-emoji reward-emoji]
+(defn component:gather-slide [id progress-key base-emoji reward-emoji speed]
   ^{:key id}
   [:section {:class "slide big"}
    (if (get-in @state [:cooldowns id])
@@ -207,10 +207,10 @@
       [:div {:class "progress-container"}
        [:div {:class "progress-bar" :style {:width (str (get @state progress-key) "%")}}]]
       [:div {:style {:cursor "pointer"}
-             :on-mouse-down #(start-gathering id progress-key)
+             :on-mouse-down #(start-gathering id progress-key speed)
              :on-mouse-up #(stop-gathering id progress-key reward-emoji)
              :on-mouse-leave #(stop-gathering id progress-key reward-emoji)
-             :on-touch-start (fn [ev] (.preventDefault ev) (start-gathering id progress-key))
+             :on-touch-start (fn [ev] (.preventDefault ev) (start-gathering id progress-key speed))
              :on-touch-end #(stop-gathering id progress-key reward-emoji)}
        [e (if (>= (get @state progress-key) 100) reward-emoji base-emoji)]]])])
 
@@ -227,10 +227,10 @@
         [e "🎮️"]]]]
      [:<>
       [component:buy-slide "🥔"]
-      [component:gather-slide "tree" :tree-progress "🌳" "🪵"]
+      [component:gather-slide "tree" :tree-progress "🌳" "🪵" 2]
       [component:catch-slide :fishing "🎣" "🐟"]
       [component:buy-slide "🥕"]
-      [component:gather-slide "rock" :rock-progress "🪨" "💎"]
+      [component:gather-slide "rock" :rock-progress "🪨" "💎" 0.8]
       [component:catch-slide :hunting "🐗" "🍗"]])])
       [component:buy-slide "🍅"]
 

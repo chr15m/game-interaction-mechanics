@@ -217,6 +217,24 @@ button {
   transform: rotate(-90deg);
 }
 
+.flying-coins-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.flying-coin {
+  position: fixed;
+  font-size: 5vmin;
+  pointer-events: none;
+  z-index: 100;
+  margin-left: -2.5vmin;
+  margin-top: -2.5vmin;
+  text-shadow: 0 0 5px rgba(0,0,0,0.5);
+}
+
 @media (min-width: 768px) {
   #app {
     display: grid;

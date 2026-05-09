@@ -14,7 +14,9 @@
      :rock-progress 0
      :catch-games {:fishing {:pos 0 :dir 1 :target-start 40 :target-width 20 :speed 1.5}
                    :hunting {:pos 50 :dir -1 :target-start 70 :target-width 15 :speed 2.5}}
-     :cooldowns {}}))
+     :cooldowns {}
+     :flying-coins {}
+     :last-click {}}))
 
 (def hold-interval (atom nil))
 
@@ -93,47 +95,85 @@
     (js/clearTimeout tid)
     (swap! slot-timeouts dissoc emoji)))
 
+(defn animate-coin! [sx sy ex ey duration cb]
+  (let [id (str (js/Math.random))]
+    (swap! state assoc-in [:flying-coins id] {:x sx :y sy :tx sx :ty sy :duration duration})
+    (js/requestAnimationFrame
+     (fn []
+       (js/requestAnimationFrame
+        (fn []
+          (swap! state update-in [:flying-coins id] assoc :tx ex :ty ey)))))
+    (js/setTimeout
+     (fn []
+       (swap! state update :flying-coins dissoc id)
+       (cb))
+     (* duration 1000))))
+
 (defn refund-coins [emoji]
-  (swap! state
-         (fn [current-state]
-           (let [slots (get-in current-state [:slots emoji])
-                 inserted-count (count (remove nil? slots))]
-             (-> current-state
-                 (update :coins + inserted-count)
-                 (assoc-in [:slots emoji] (vec (repeat (count slots) nil)))))))
-  (swap! slot-timeouts dissoc emoji))
+  (let [curr @state
+        slots (get-in curr [:slots emoji])
+        last-click (get-in curr [:last-click emoji] {:x (/ (.-innerWidth js/window) 2) :y (/ (.-innerHeight js/window) 2)})
+        cx (:x last-click)
+        cy (:y last-click)]
+    (swap! state assoc-in [:slots emoji] (vec (repeat (count slots) nil)))
+    (swap! slot-timeouts dissoc emoji)
+    (doseq [[idx slot-val] (map-indexed vector slots)]
+      (when slot-val
+        (let [slot-id (str "slot-" emoji "-" idx)
+              slot-el (js/document.getElementById slot-id)
+              rect (when slot-el (.getBoundingClientRect slot-el))
+              sx (if rect (+ (.-left rect) (/ (.-width rect) 2)) cx)
+              sy (if rect (+ (.-top rect) (/ (.-height rect) 2)) cy)
+              duration (+ 0.25 (* (js/Math.random) 0.25))]
+          (animate-coin! sx sy cx cy duration
+            (fn []
+              (swap! state update :coins inc))))))))
 
 (defn set-slot-timeout [emoji]
   (clear-slot-timeout emoji)
   (swap! slot-timeouts assoc emoji
          (js/setTimeout #(refund-coins emoji) 1500)))
 
-(defn handle-click [emoji cooldown-time]
+(defn handle-click [ev emoji cooldown-time]
   (let [current-state @state
         coins (:coins current-state)
         slots (get-in current-state [:slots emoji])
-        on-cooldown? (get-in current-state [:cooldowns emoji])]
+        on-cooldown? (get-in current-state [:cooldowns emoji])
+        cx (or (.-clientX ev) (when (.-touches ev) (.-clientX (aget (.-touches ev) 0))) (/ (.-innerWidth js/window) 2))
+        cy (or (.-clientY ev) (when (.-touches ev) (.-clientY (aget (.-touches ev) 0))) (/ (.-innerHeight js/window) 2))]
+    (swap! state assoc-in [:last-click emoji] {:x cx :y cy})
     (when (and (> coins 0) (some nil? slots) (not on-cooldown?))
       (let [slot-index (.indexOf slots nil)
-            new-slots (assoc slots slot-index "🪙")
-            is-full? (not (some nil? new-slots))]
-        (if is-full?
-          (do
-            (clear-slot-timeout emoji)
-            (swap! state
-                   (fn [s]
-                     (-> s
-                         (update :coins dec)
-                         (update-in [:inventory emoji] (fnil inc 0))
-                         (assoc-in [:slots emoji] (vec (repeat (count slots) nil)))
-                         (assoc-in [:cooldowns emoji] {:current cooldown-time :max cooldown-time})))))
-          (do
-            (set-slot-timeout emoji)
-            (swap! state
-                   (fn [s]
-                     (-> s
-                         (update :coins dec)
-                         (assoc-in [:slots emoji] new-slots))))))))))
+            slot-id (str "slot-" emoji "-" slot-index)
+            slot-el (js/document.getElementById slot-id)
+            rect (when slot-el (.getBoundingClientRect slot-el))
+            ex (if rect (+ (.-left rect) (/ (.-width rect) 2)) cx)
+            ey (if rect (+ (.-top rect) (/ (.-height rect) 2)) cy)]
+        (swap! state
+               (fn [s]
+                 (-> s
+                     (update :coins dec)
+                     (assoc-in [:slots emoji slot-index] :pending))))
+        (set-slot-timeout emoji)
+        (animate-coin! cx cy ex ey 0.5
+          (fn []
+            (let [curr @state
+                  curr-slots (get-in curr [:slots emoji])]
+              (when (= :pending (nth curr-slots slot-index nil))
+                (let [new-slots (assoc curr-slots slot-index "🪙")
+                      is-full? (not (some #(not= % "🪙") new-slots))]
+                  (if is-full?
+                    (do
+                      (clear-slot-timeout emoji)
+                      (swap! state
+                             (fn [s]
+                               (-> s
+                                   (update-in [:inventory emoji] (fnil inc 0))
+                                   (assoc-in [:slots emoji] (vec (repeat (count curr-slots) nil)))
+                                   (assoc-in [:cooldowns emoji] {:current cooldown-time :max cooldown-time})))))
+                    (do
+                      (set-slot-timeout emoji)
+                      (swap! state assoc-in [:slots emoji] new-slots))))))))))))
 
 (defn component:hud []
   [:div {:class "hud"} "🪙 " (:coins @state)])
@@ -187,18 +227,19 @@
                 (fn [col-idx slot]
                   (let [dist (js/Math.abs (- col-idx middle))
                         y-offset (* dist dist 0.2)
-                        style {:transform (str "translateY(" y-offset "em)")}]
-                    (if slot
+                        style {:transform (str "translateY(" y-offset "em)")}
+                        slot-id (str "slot-" emoji "-" (+ (* row-idx slots-per-row) col-idx))]
+                    (if (= slot "🪙")
                       [:span
-                       {:class "emoji filled" :style style :key col-idx}
+                       {:class "emoji filled" :style style :key col-idx :id slot-id}
                        "🪙"]
                       [:span
-                       {:class "emoji" :style style :key col-idx}
+                       {:class "emoji" :style style :key col-idx :id slot-id}
                        "⚪"])))
                 row-vec))])
           rows))]
       [:div {:style {:cursor "pointer"}
-             :on-click #(handle-click emoji cooldown-time)}
+             :on-click #(handle-click % emoji cooldown-time)}
        [e emoji]]])])
 
 (defn component:catch-slide [game-id display-emoji reward-emoji cooldown-time]
@@ -241,8 +282,20 @@
              :on-touch-end #(stop-gathering id progress-key reward-emoji cooldown-time)}
        [e (if (>= (get @state progress-key) 100) reward-emoji base-emoji)]]])])
 
+(defn component:flying-coins []
+  [:div {:class "flying-coins-layer"}
+   (for [[id coin] (:flying-coins @state)]
+     ^{:key id}
+     [:div {:class "flying-coin"
+            :style {:left (str (:x coin) "px")
+                    :top (str (:y coin) "px")
+                    :transition (str "transform " (:duration coin) "s ease-in")
+                    :transform (str "translate(" (- (:tx coin) (:x coin)) "px, " (- (:ty coin) (:y coin)) "px)")}}
+      "🪙"])])
+
 (defn component:app [_state]
   [:<>
+   [component:flying-coins]
    [component:hud]
    [component:inventory]
    (if-not (:started @state)

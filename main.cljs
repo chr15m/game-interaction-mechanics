@@ -86,26 +86,54 @@
         (swap! state update-in [:inventory reward-emoji] inc))
       (swap! state assoc-in [:cooldowns game-id] {:current cooldown-time :max cooldown-time}))))
 
-(defn handle-click [emoji cooldown-time]
+(defonce slot-timeouts (atom {}))
+
+(defn clear-slot-timeout [emoji]
+  (when-let [tid (get @slot-timeouts emoji)]
+    (js/clearTimeout tid)
+    (swap! slot-timeouts dissoc emoji)))
+
+(defn refund-coins [emoji]
   (swap! state
          (fn [current-state]
-           (let [coins (:coins current-state)
-                 slots (get-in current-state [:slots emoji])
-                 on-cooldown? (get-in current-state [:cooldowns emoji])]
-             (if (and (> coins 0) (some nil? slots) (not on-cooldown?))
-               (let [slot-index (.indexOf slots nil)
-                     new-slots (assoc slots slot-index "🪙")
-                     is-full? (not (some nil? new-slots))]
-                 (if is-full?
-                   (-> current-state
-                       (update :coins dec)
-                       (update-in [:inventory emoji] (fnil inc 0))
-                       (assoc-in [:slots emoji] (vec (repeat (count slots) nil)))
-                       (assoc-in [:cooldowns emoji] {:current cooldown-time :max cooldown-time}))
-                   (-> current-state
-                       (update :coins dec)
-                       (assoc-in [:slots emoji] new-slots))))
-               current-state)))))
+           (let [slots (get-in current-state [:slots emoji])
+                 inserted-count (count (remove nil? slots))]
+             (-> current-state
+                 (update :coins + inserted-count)
+                 (assoc-in [:slots emoji] (vec (repeat (count slots) nil)))))))
+  (swap! slot-timeouts dissoc emoji))
+
+(defn set-slot-timeout [emoji]
+  (clear-slot-timeout emoji)
+  (swap! slot-timeouts assoc emoji
+         (js/setTimeout #(refund-coins emoji) 1500)))
+
+(defn handle-click [emoji cooldown-time]
+  (let [current-state @state
+        coins (:coins current-state)
+        slots (get-in current-state [:slots emoji])
+        on-cooldown? (get-in current-state [:cooldowns emoji])]
+    (when (and (> coins 0) (some nil? slots) (not on-cooldown?))
+      (let [slot-index (.indexOf slots nil)
+            new-slots (assoc slots slot-index "🪙")
+            is-full? (not (some nil? new-slots))]
+        (if is-full?
+          (do
+            (clear-slot-timeout emoji)
+            (swap! state
+                   (fn [s]
+                     (-> s
+                         (update :coins dec)
+                         (update-in [:inventory emoji] (fnil inc 0))
+                         (assoc-in [:slots emoji] (vec (repeat (count slots) nil)))
+                         (assoc-in [:cooldowns emoji] {:current cooldown-time :max cooldown-time})))))
+          (do
+            (set-slot-timeout emoji)
+            (swap! state
+                   (fn [s]
+                     (-> s
+                         (update :coins dec)
+                         (assoc-in [:slots emoji] new-slots))))))))))
 
 (defn component:hud []
   [:div {:class "hud"} "🪙 " (:coins @state)])

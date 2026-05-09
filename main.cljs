@@ -45,9 +45,11 @@
                           (fn [cds]
                             (reduce-kv
                              (fn [m k v]
-                               (let [new-v (- v 0.1)]
+                               (let [current (if (map? v) (:current v) v)
+                                     max-val (if (map? v) (:max v) v)
+                                     new-v (- current 0.1)]
                                  (if (> new-v 0)
-                                   (assoc m k new-v)
+                                   (assoc m k {:current new-v :max max-val})
                                    m)))
                              {} cds)))))))
    20))
@@ -69,16 +71,16 @@
                           (+ p speed)))))
              20))))
 
-(defn stop-gathering [id progress-key reward-emoji]
+(defn stop-gathering [id progress-key reward-emoji cooldown-time]
   (when @hold-interval
     (js/clearInterval @hold-interval)
     (reset! hold-interval nil))
   (when (>= (get @state progress-key) 100)
     (swap! state update-in [:inventory reward-emoji] inc)
-    (swap! state assoc-in [:cooldowns id] 100))
+    (swap! state assoc-in [:cooldowns id] {:current cooldown-time :max cooldown-time}))
   (swap! state assoc progress-key 0))
 
-(defn handle-catch [game-id reward-emoji]
+(defn handle-catch [game-id reward-emoji cooldown-time]
   (let [game (get-in @state [:catch-games game-id])
         pos (:pos game)
         start (:target-start game)
@@ -87,9 +89,9 @@
     (when-not on-cooldown?
       (when (and (>= pos start) (<= pos end))
         (swap! state update-in [:inventory reward-emoji] inc))
-      (swap! state assoc-in [:cooldowns game-id] 100))))
+      (swap! state assoc-in [:cooldowns game-id] {:current cooldown-time :max cooldown-time}))))
 
-(defn handle-click [emoji]
+(defn handle-click [emoji cooldown-time]
   (swap! state
          (fn [current-state]
            (let [coins (:coins current-state)
@@ -104,7 +106,7 @@
                        (update :coins dec)
                        (update-in [:inventory emoji] (fnil inc 0))
                        (assoc-in [:slots emoji] (vec (repeat (count slots) nil)))
-                       (assoc-in [:cooldowns emoji] 100))
+                       (assoc-in [:cooldowns emoji] {:current cooldown-time :max cooldown-time}))
                    (-> current-state
                        (update :coins dec)
                        (assoc-in [:slots emoji] new-slots))))
@@ -124,10 +126,12 @@
         [:div {:class "badge"} count])])])
 
 (defn component:cooldown-indicator [id emoji-char]
-  (let [cd (get-in @state [:cooldowns id])
+  (let [cd-val (get-in @state [:cooldowns id])
+        current (if (map? cd-val) (:current cd-val) cd-val)
+        max-val (if (map? cd-val) (:max cd-val) 100)
         radius 40
         circumference (* 2 js/Math.PI radius)
-        offset (- (* circumference (- 1 (/ cd 100))))]
+        offset (- (* circumference (- 1 (/ current max-val))))]
     [:div {:style {:position "relative" :display "flex" :justify-content "center" :align-items "center"}}
      [:span {:style {:opacity 0.5}} [e emoji-char]]
      [:svg {:class "circular-progress"
@@ -140,7 +144,7 @@
                 :stroke-dasharray circumference
                 :stroke-dashoffset offset}]]]))
 
-(defn component:buy-slide [emoji]
+(defn component:buy-slide [emoji cooldown-time]
   ^{:key emoji}
   [:section {:class "slide big"}
    (if (get-in @state [:cooldowns emoji])
@@ -171,10 +175,10 @@
                 row-vec))])
           rows))]
       [:div {:style {:cursor "pointer"}
-             :on-click #(handle-click emoji)}
+             :on-click #(handle-click emoji cooldown-time)}
        [e emoji]]])])
 
-(defn component:catch-slide [game-id display-emoji reward-emoji]
+(defn component:catch-slide [game-id display-emoji reward-emoji cooldown-time]
   (let [game (get-in @state [:catch-games game-id])]
     ^{:key game-id}
     [:section {:class "slide big"}
@@ -186,19 +190,19 @@
                 :style {:left (str (+ (:target-start game) (/ (:target-width game) 2)) "%")}}
           [e "👇"]]
          [:div {:class "catch-container"
-                :on-mouse-down #(handle-catch game-id reward-emoji)
-                :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji))}
+                :on-mouse-down #(handle-catch game-id reward-emoji cooldown-time)
+                :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji cooldown-time))}
           [:div {:class "catch-target"
                  :style {:left (str (:target-start game) "%")
                          :width (str (:target-width game) "%")}}]
           [:div {:class "catch-indicator"
                  :style {:left (str (:pos game) "%")}}]]]
         [:div {:style {:cursor "pointer"}
-               :on-mouse-down #(handle-catch game-id reward-emoji)
-               :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji))}
+               :on-mouse-down #(handle-catch game-id reward-emoji cooldown-time)
+               :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji cooldown-time))}
          [e display-emoji]]])]))
 
-(defn component:gather-slide [id progress-key base-emoji reward-emoji speed]
+(defn component:gather-slide [id progress-key base-emoji reward-emoji speed cooldown-time]
   ^{:key id}
   [:section {:class "slide big"}
    (if (get-in @state [:cooldowns id])
@@ -208,10 +212,10 @@
        [:div {:class "progress-bar" :style {:width (str (get @state progress-key) "%")}}]]
       [:div {:style {:cursor "pointer"}
              :on-mouse-down #(start-gathering id progress-key speed)
-             :on-mouse-up #(stop-gathering id progress-key reward-emoji)
-             :on-mouse-leave #(stop-gathering id progress-key reward-emoji)
+             :on-mouse-up #(stop-gathering id progress-key reward-emoji cooldown-time)
+             :on-mouse-leave #(stop-gathering id progress-key reward-emoji cooldown-time)
              :on-touch-start (fn [ev] (.preventDefault ev) (start-gathering id progress-key speed))
-             :on-touch-end #(stop-gathering id progress-key reward-emoji)}
+             :on-touch-end #(stop-gathering id progress-key reward-emoji cooldown-time)}
        [e (if (>= (get @state progress-key) 100) reward-emoji base-emoji)]]])])
 
 (defn component:app [_state]
@@ -226,13 +230,13 @@
                  :on-click #(swap! state assoc :started true)}
         [e "🎮️"]]]]
      [:<>
-      [component:buy-slide "🥔"]
-      [component:gather-slide "tree" :tree-progress "🌳" "🪵" 2]
-      [component:catch-slide :fishing "🎣" "🐟"]
-      [component:buy-slide "🥕"]
-      [component:gather-slide "rock" :rock-progress "🪨" "💎" 0.8]
-      [component:catch-slide :hunting "🐗" "🍗"]])])
-      [component:buy-slide "🍅"]
+      [component:buy-slide "🥔" 75]
+      [component:gather-slide "tree" :tree-progress "🌳" "🪵" 2 75]
+      [component:catch-slide :fishing "🎣" "🐟" 75]
+      [component:buy-slide "🥕" 150]
+      [component:gather-slide "rock" :rock-progress "🪨" "💎" 0.8 150]
+      [component:catch-slide :hunting "🐗" "🍗" 150]
+      [component:buy-slide "🍅" 150]])])
 
 (rdom/render [component:app state]
           (.getElementById js/document "app"))

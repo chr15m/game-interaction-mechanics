@@ -152,6 +152,10 @@ button {
   text-align: center;
 }
 
+.home h1 {
+  font-size: 1em;
+}
+
 .home h4 {
   color: #707067;
 }
@@ -160,6 +164,8 @@ button {
   margin: 1em 0px;
   border: none;
   background: transparent;
+  font-size: 2em;
+  width: auto;
 }
 
 .hud {

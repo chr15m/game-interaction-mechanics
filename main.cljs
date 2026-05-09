@@ -3,7 +3,7 @@
     [reagent.core :as r]
     [reagent.dom :as rdom]))
 
-(def state
+(defonce state
   (r/atom
     {:coins 99
      :inventory {"🥔" 0 "🪵" 0 "💎" 0 "🥕" 0 "🍅" 0 "🐟" 0 "🍗" 0}

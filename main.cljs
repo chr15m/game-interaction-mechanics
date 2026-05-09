@@ -223,7 +223,7 @@
       [:p
        [:button {:class "cta"
                  :on-click #(swap! state assoc :started true)}
-        [e "🎮️"]]]]
+        [e "🎯"]]]]
      [:<>
       [component:buy-slide "🥔" 75]
       [component:gather-slide "tree" :tree-progress "🌳" "🪵" 2 75]

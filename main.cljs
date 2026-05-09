@@ -18,7 +18,12 @@
 
 (def hold-interval (atom nil))
 
-(def animation-interval
+(defonce animation-interval-ref (atom nil))
+
+(when @animation-interval-ref
+  (js/clearInterval @animation-interval-ref))
+
+(reset! animation-interval-ref
   (js/setInterval
    (fn []
      (swap! state
@@ -176,14 +181,18 @@
      (if (get-in @state [:cooldowns game-id])
        [component:cooldown-indicator game-id display-emoji]
        [:<>
-        [:div {:class "catch-container"
-               :on-mouse-down #(handle-catch game-id reward-emoji)
-               :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji))}
-         [:div {:class "catch-target"
-                :style {:left (str (:target-start game) "%")
-                        :width (str (:target-width game) "%")}}]
-         [:div {:class "catch-indicator"
-                :style {:left (str (:pos game) "%")}}]]
+        [:div {:class "catch-wrapper"}
+         [:div {:class "catch-finger"
+                :style {:left (str (+ (:target-start game) (/ (:target-width game) 2)) "%")}}
+          [e "👇"]]
+         [:div {:class "catch-container"
+                :on-mouse-down #(handle-catch game-id reward-emoji)
+                :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji))}
+          [:div {:class "catch-target"
+                 :style {:left (str (:target-start game) "%")
+                         :width (str (:target-width game) "%")}}]
+          [:div {:class "catch-indicator"
+                 :style {:left (str (:pos game) "%")}}]]]
         [:div {:style {:cursor "pointer"}
                :on-mouse-down #(handle-catch game-id reward-emoji)
                :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji))}

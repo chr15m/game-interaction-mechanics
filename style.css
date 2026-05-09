@@ -98,20 +98,37 @@ button {
   width: 0%;
 }
 
-.catch-container {
+.catch-wrapper {
+  position: relative;
   width: 50vmin;
+  margin-bottom: 0.5em;
+}
+
+.catch-container {
+  width: 100%;
   height: 4vmin;
   background-color: var(--c-mid);
   border-radius: 2vmin;
-  margin-bottom: 0.5em;
   position: relative;
   overflow: hidden;
+}
+
+.catch-finger {
+  position: absolute;
+  bottom: 100%;
+  transform: translateX(-50%);
+  font-size: 4vmin;
+  padding-bottom: 0.5vmin;
+  pointer-events: none;
 }
 
 .catch-target {
   position: absolute;
   height: 100%;
-  background-color: rgba(243, 243, 232, 0.3);
+  background-color: rgba(255, 255, 0, 0.2);
+  border: 2px dashed var(--c-fg);
+  box-sizing: border-box;
+  border-radius: 1vmin;
 }
 
 .catch-indicator {
@@ -211,7 +228,7 @@ button {
     font-size: 15vmin;
   }
   .progress-container,
-  .catch-container {
+  .catch-wrapper {
     width: 25vmin;
   }
   .circular-progress {

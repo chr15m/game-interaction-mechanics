@@ -18,12 +18,7 @@
 
 (def hold-interval (atom nil))
 
-(defonce animation-interval-ref (atom nil))
-
-(when @animation-interval-ref
-  (js/clearInterval @animation-interval-ref))
-
-(reset! animation-interval-ref
+(defonce animation-interval-ref
   (js/setInterval
    (fn []
      (swap! state

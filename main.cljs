@@ -394,13 +394,13 @@
                  :on-click #(swap! state assoc :started true)}
         [e "🎯"]]]]
      [:<>
-      [component:buy-slide "🥔" 75]
-      [component:gather-slide "tree" :tree-progress "🌳" "🪵" 2 75]
-      [component:catch-slide :fishing "🎣" "🐟" 75]
-      [component:buy-slide "🥕" 150]
-      [component:gather-slide "rock" :rock-progress "🪨" "💎" 0.8 150]
-      [component:catch-slide :hunting "🐗" "🍗" 150]
-      [component:buy-slide "🍅" 150]])])
+      [component:buy-slide "🥔" 56.25]
+      [component:gather-slide "tree" :tree-progress "🌳" "🪵" 2 56.25]
+      [component:catch-slide :fishing "🎣" "🐟" 56.25]
+      [component:buy-slide "🥕" 112.5]
+      [component:gather-slide "rock" :rock-progress "🪨" "💎" 0.8 112.5]
+      [component:catch-slide :hunting "🐗" "🍗" 112.5]
+      [component:buy-slide "🍅" 112.5]])])
 
 (rdom/render [component:app state]
           (.getElementById js/document "app"))

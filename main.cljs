@@ -16,6 +16,7 @@
                    :hunting {:pos 50 :dir -1 :target-start 70 :target-width 15 :speed 2.5}}
      :cooldowns {}
      :flying-coins {}
+     :ghosts {}
      :last-click {}}))
 
 (def hold-interval (atom nil))
@@ -68,13 +69,26 @@
                           (+ p speed)))))
              20))))
 
+(defn spawn-ghost! [el-id emoji]
+  (let [el (js/document.getElementById el-id)
+        rect (when el (.getBoundingClientRect el))
+        cx (if rect (+ (.-left rect) (/ (.-width rect) 2)) (/ (.-innerWidth js/window) 2))
+        cy (if rect (+ (.-top rect) (/ (.-height rect) 2)) (/ (.-innerHeight js/window) 2))
+        id (str (js/Math.random))]
+    (swap! state assoc-in [:ghosts id] {:x cx :y cy :emoji emoji})
+    (js/setTimeout #(swap! state update :ghosts dissoc id) 2000)))
+
 (defn stop-gathering [id progress-key reward-emoji cooldown-time]
   (when @hold-interval
     (js/clearInterval @hold-interval)
     (reset! hold-interval nil))
-  (when (>= (get @state progress-key) 100)
-    (swap! state update-in [:inventory reward-emoji] inc)
-    (swap! state assoc-in [:cooldowns id] {:current cooldown-time :max cooldown-time}))
+  (let [progress (get @state progress-key)]
+    (when (> progress 0)
+      (if (>= progress 100)
+        (do
+          (swap! state update-in [:inventory reward-emoji] inc)
+          (swap! state assoc-in [:cooldowns id] {:current cooldown-time :max cooldown-time}))
+        (spawn-ghost! (str "progress-" id) reward-emoji))))
   (swap! state assoc progress-key 0))
 
 (defn handle-catch [game-id reward-emoji cooldown-time]
@@ -84,8 +98,9 @@
         end (+ start (:target-width game))
         on-cooldown? (get-in @state [:cooldowns game-id])]
     (when-not on-cooldown?
-      (when (and (>= pos start) (<= pos end))
-        (swap! state update-in [:inventory reward-emoji] inc))
+      (if (and (>= pos start) (<= pos end))
+        (swap! state update-in [:inventory reward-emoji] inc)
+        (spawn-ghost! (str "catch-" (name game-id)) reward-emoji))
       (swap! state assoc-in [:cooldowns game-id] {:current cooldown-time :max cooldown-time}))))
 
 (defonce slot-timeouts (atom {}))
@@ -114,7 +129,10 @@
         slots (get-in curr [:slots emoji])
         last-click (get-in curr [:last-click emoji] {:x (/ (.-innerWidth js/window) 2) :y (/ (.-innerHeight js/window) 2)})
         cx (:x last-click)
-        cy (:y last-click)]
+        cy (:y last-click)
+        inserted-count (count (remove nil? slots))]
+    (when (> inserted-count 0)
+      (spawn-ghost! (str "slots-" emoji) emoji))
     (swap! state assoc-in [:slots emoji] (vec (repeat (count slots) nil)))
     (swap! slot-timeouts dissoc emoji)
     (doseq [[idx slot-val] (map-indexed vector slots)]
@@ -213,7 +231,7 @@
    (if (get-in @state [:cooldowns emoji])
      [component:cooldown-indicator emoji emoji]
      [:<>
-      [:div {:class "slots"}
+      [:div {:class "slots" :id (str "slots-" emoji)}
        (let [slots-vec (get-in @state [:slots emoji])
              slots-per-row 5
              rows (partition-all slots-per-row slots-vec)]
@@ -254,6 +272,7 @@
                 :style {:left (str (+ (:target-start game) (/ (:target-width game) 2)) "%")}}
           [e "👇"]]
          [:div {:class "catch-container"
+                :id (str "catch-" (name game-id))
                 :on-mouse-down #(handle-catch game-id reward-emoji cooldown-time)
                 :on-touch-start (fn [ev] (.preventDefault ev) (handle-catch game-id reward-emoji cooldown-time))}
           [:div {:class "catch-target"
@@ -272,7 +291,7 @@
    (if (get-in @state [:cooldowns id])
      [component:cooldown-indicator id base-emoji]
      [:<>
-      [:div {:class "progress-container"}
+      [:div {:class "progress-container" :id (str "progress-" id)}
        [:div {:class "progress-bar" :style {:width (str (get @state progress-key) "%")}}]]
       [:div {:style {:cursor "pointer"}
              :on-mouse-down #(start-gathering id progress-key speed)
@@ -293,8 +312,18 @@
                     :transform (str "translate(" (- (:tx coin) (:x coin)) "px, " (- (:ty coin) (:y coin)) "px)")}}
       "🪙"])])
 
+(defn component:ghosts []
+  [:div {:class "ghost-layer"}
+   (for [[id ghost] (:ghosts @state)]
+     ^{:key id}
+     [:div {:class "ghost-wrapper"
+            :style {:left (str (:x ghost) "px")
+                    :top (str (:y ghost) "px")}}
+      [:div {:class "ghost-emoji"} [e (:emoji ghost)]]])])
+
 (defn component:app [_state]
   [:<>
+   [component:ghosts]
    [component:flying-coins]
    [component:hud]
    [component:inventory]

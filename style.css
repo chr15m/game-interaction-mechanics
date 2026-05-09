@@ -235,6 +235,38 @@ button {
   text-shadow: 0 0 5px rgba(0,0,0,0.5);
 }
 
+.ghost-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.ghost-wrapper {
+  position: fixed;
+  pointer-events: none;
+  z-index: 100;
+  animation: ghost-float 2s ease-out forwards;
+}
+
+.ghost-emoji {
+  font-size: 10vmin;
+  margin-left: -5vmin;
+  margin-top: -5vmin;
+  animation: ghost-wobble 0.4s ease-in-out infinite alternate;
+}
+
+@keyframes ghost-float {
+  0% { opacity: 0.9; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-20vmin); }
+}
+
+@keyframes ghost-wobble {
+  0% { transform: translateX(-2vmin); }
+  100% { transform: translateX(2vmin); }
+}
+
 @media (min-width: 768px) {
   #app {
     display: grid;
@@ -259,5 +291,10 @@ button {
   .circular-progress {
     width: 4.375vmin;
     height: 4.375vmin;
+  }
+  .ghost-emoji {
+    font-size: 5vmin;
+    margin-left: -2.5vmin;
+    margin-top: -2.5vmin;
   }
 }

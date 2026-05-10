@@ -18,7 +18,8 @@
      :flying-coins {}
      :flying-items {}
      :ghosts {}
-     :particles {}
+     :stars {}
+     :clouds {}
      :last-click {}}))
 
 (def hold-interval (atom nil))
@@ -120,23 +121,21 @@
     (swap! state assoc-in [:ghosts id] {:x cx :y cy :emoji emoji})
     (js/setTimeout #(swap! state update :ghosts dissoc id) 2000)))
 
-(def particle-emojis ["✨" "⭐" "🌟" "💫" "💥"])
+(defn spawn-cloud! [cx cy]
+  (let [id (str (js/Math.random))]
+    (swap! state assoc-in [:clouds id] {:x cx :y cy})
+    (js/setTimeout #(swap! state update :clouds dissoc id) 1000)))
 
-(defn spawn-particles! [cx cy]
-  (let [n 12
-        new-particles (into {}
-                            (for [_ (range n)
-                                  :let [id (str (js/Math.random))]]
-                              [id {:x cx
-                                   :y cy
-                                   :emoji (rand-nth particle-emojis)
-                                   :jump (+ (* (js/Math.random) 2) 0.5)
-                                   :direction (* (- (js/Math.random) 0.5) 2)
-                                   :spin (- (js/Math.random) 0.5)
-                                   :size (+ (* (js/Math.random) 0.5) 1.0)
-                                   :delay (* (js/Math.random) 0.25)}]))]
-    (swap! state update :particles merge new-particles)
-    (js/setTimeout #(swap! state update :particles (fn [ps] (reduce dissoc ps (keys new-particles)))) 2000)))
+(defn spawn-star! [cx cy]
+  (let [id (str (js/Math.random))
+        offset (* 0.1 (js/Math.min (.-innerWidth js/window) (.-innerHeight js/window)))
+        target-y (- cy offset)]
+    (swap! state assoc-in [:stars id] {:x cx :y cy :ty target-y})
+    (js/setTimeout
+     (fn []
+       (swap! state update :stars dissoc id)
+       (spawn-cloud! cx target-y))
+     1200)))
 
 (defn stop-gathering [_ev id progress-key reward-emoji cooldown-time]
   (when @hold-interval
@@ -155,7 +154,7 @@
               emy (if em-rect (+ (.-top em-rect) (/ (.-height em-rect) 2)) py)]
           (swap! state update-in [:inventory reward-emoji] inc)
           (swap! state assoc-in [:cooldowns id] {:current cooldown-time :max cooldown-time})
-          (spawn-particles! px py)
+          (spawn-star! px py)
           (animate-item! emx emy reward-emoji nil))
         (spawn-ghost! (str "progress-" id) reward-emoji))))
   (swap! state assoc progress-key 0))
@@ -178,7 +177,7 @@
               emx (if em-rect (+ (.-left em-rect) (/ (.-width em-rect) 2)) px)
               emy (if em-rect (+ (.-top em-rect) (/ (.-height em-rect) 2)) py)]
           (swap! state update-in [:inventory reward-emoji] inc)
-          (spawn-particles! px py)
+          (spawn-star! px py)
           (animate-item! emx emy reward-emoji nil))
         (spawn-ghost! (str "catch-" (name game-id)) reward-emoji))
       (swap! state assoc-in [:cooldowns game-id] {:current cooldown-time :max cooldown-time}))))
@@ -268,7 +267,7 @@
                                    (update-in [:inventory emoji] (fnil inc 0))
                                    (assoc-in [:slots emoji] (vec (repeat (count curr-slots) nil)))
                                    (assoc-in [:cooldowns emoji] {:current cooldown-time :max cooldown-time}))))
-                      (spawn-particles! ex ey)
+                      (spawn-star! ex ey)
                       (let [em-el (js/document.getElementById (str "emoji-" emoji))
                             em-rect (when em-el (.getBoundingClientRect em-el))
                             emx (if em-rect (+ (.-left em-rect) (/ (.-width em-rect) 2)) ex)
@@ -426,23 +425,29 @@
                     :top (str (:y ghost) "px")}}
       [:div {:class "ghost-emoji"} [e (:emoji ghost)]]])])
 
-(defn component:particles []
-  [:div {:class "particle-layer"}
-   (for [[id p] (:particles @state)]
+(defn component:stars []
+  [:div {:class "star-layer"}
+   (for [[id star] (:stars @state)]
      ^{:key id}
-     [:div {:class "particle-wrapper"
-            :style {:left (str (:x p) "px")
-                    :top (str (:y p) "px")
-                    "--particle-jump" (:jump p)
-                    "--particle-direction" (:direction p)
-                    "--particle-spin" (:spin p)
-                    "--particle-size" (:size p)
-                    "--particle-delay" (str (:delay p) "s")}}
-      [:div {:class "particle-inner"} [e (:emoji p)]]])])
+     [:div {:class "star-wrapper"
+            :style {:left (str (:x star) "px")
+                    :top (str (:y star) "px")
+                    "--target-y" (str (- (:ty star) (:y star)) "px")}}
+      [e "⭐"]])])
+
+(defn component:clouds []
+  [:div {:class "cloud-layer"}
+   (for [[id cloud] (:clouds @state)]
+     ^{:key id}
+     [:div {:class "cloud-wrapper"
+            :style {:left (str (:x cloud) "px")
+                    :top (str (:y cloud) "px")}}
+      [:div {:class "cloud-inner"} [e "☁️"]]])])
 
 (defn component:app [_state]
   [:<>
-   [component:particles]
+   [component:stars]
+   [component:clouds]
    [component:ghosts]
    [component:flying-items]
    [component:flying-coins]

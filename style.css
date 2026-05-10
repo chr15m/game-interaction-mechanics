@@ -191,6 +191,11 @@ button {
 .inventory-item {
   position: relative;
   font-size: 6vmin;
+  transition: filter 0.2s ease-out;
+}
+
+.inventory-item.arriving {
+  filter: grayscale(100%) opacity(50%);
 }
 
 .badge {
@@ -238,12 +243,29 @@ button {
 
 .flying-item {
   position: fixed;
-  font-size: 3vmin;
+  font-size: 6vmin;
   pointer-events: none;
   z-index: 100;
-  margin-left: -1.5vmin;
-  margin-top: -1.5vmin;
+  margin-left: -3vmin;
+  margin-top: -3vmin;
   text-shadow: 0 0 5px rgba(0,0,0,0.5);
+}
+
+.flying-item-inner {
+  animation-name: flying-wobble;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: forwards;
+}
+
+@keyframes flying-wobble {
+  0% { transform: translateX(0) rotate(0deg); }
+  15% { transform: translateX(-2vmin) rotate(-15deg); }
+  30% { transform: translateX(2vmin) rotate(15deg); }
+  45% { transform: translateX(-2vmin) rotate(-15deg); }
+  60% { transform: translateX(2vmin) rotate(15deg); }
+  75% { transform: translateX(-1vmin) rotate(-7deg); }
+  85% { transform: translateX(0.5vmin) rotate(3deg); }
+  100% { transform: translateX(0) rotate(0deg); }
 }
 
 .ghost-layer {

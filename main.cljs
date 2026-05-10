@@ -18,6 +18,7 @@
      :flying-coins {}
      :flying-items {}
      :ghosts {}
+     :particles {}
      :last-click {}}))
 
 (def hold-interval (atom nil))
@@ -118,21 +119,43 @@
     (swap! state assoc-in [:ghosts id] {:x cx :y cy :emoji emoji})
     (js/setTimeout #(swap! state update :ghosts dissoc id) 2000)))
 
-(defn stop-gathering [ev id progress-key reward-emoji cooldown-time]
+(def particle-emojis ["✨" "⭐" "🌟" "💫" "💥"])
+
+(defn spawn-particles! [cx cy]
+  (let [n 12
+        new-particles (into {}
+                            (for [_ (range n)
+                                  :let [id (str (js/Math.random))]]
+                              [id {:x cx
+                                   :y cy
+                                   :emoji (rand-nth particle-emojis)
+                                   :jump (+ (* (js/Math.random) 2) 0.5)
+                                   :direction (* (- (js/Math.random) 0.5) 2)
+                                   :spin (- (js/Math.random) 0.5)
+                                   :size (+ (* (js/Math.random) 0.5) 1.0)
+                                   :delay (* (js/Math.random) 1)}]))]
+    (swap! state update :particles merge new-particles)
+    (js/setTimeout #(swap! state update :particles (fn [ps] (reduce dissoc ps (keys new-particles)))) 2500)))
+
+(defn stop-gathering [_ev id progress-key reward-emoji cooldown-time]
   (when @hold-interval
     (js/clearInterval @hold-interval)
     (reset! hold-interval nil))
   (let [progress (get @state progress-key)]
     (when (> progress 0)
       (if (>= progress 100)
-        (let [[cx cy] (get-event-coords ev (str "progress-" id))]
+        (let [el (js/document.getElementById (str "progress-" id))
+              rect (when el (.getBoundingClientRect el))
+              px (if rect (.-right rect) (/ (.-innerWidth js/window) 2))
+              py (if rect (+ (.-top rect) (/ (.-height rect) 2)) (/ (.-innerHeight js/window) 2))]
           (swap! state update-in [:inventory reward-emoji] inc)
           (swap! state assoc-in [:cooldowns id] {:current cooldown-time :max cooldown-time})
-          (animate-item! cx cy reward-emoji nil))
+          (spawn-particles! px py)
+          (animate-item! px py reward-emoji nil))
         (spawn-ghost! (str "progress-" id) reward-emoji))))
   (swap! state assoc progress-key 0))
 
-(defn handle-catch [ev game-id reward-emoji cooldown-time]
+(defn handle-catch [_ev game-id reward-emoji cooldown-time]
   (let [game (get-in @state [:catch-games game-id])
         pos (:pos game)
         start (:target-start game)
@@ -140,9 +163,14 @@
         on-cooldown? (get-in @state [:cooldowns game-id])]
     (when-not on-cooldown?
       (if (and (>= pos start) (<= pos end))
-        (let [[cx cy] (get-event-coords ev (str "catch-" (name game-id)))]
+        (let [el (js/document.getElementById (str "catch-" (name game-id)))
+              rect (when el (.getBoundingClientRect el))
+              target-center (+ start (/ (:target-width game) 2))
+              px (if rect (+ (.-left rect) (* (.-width rect) (/ target-center 100.0))) (/ (.-innerWidth js/window) 2))
+              py (if rect (+ (.-top rect) (/ (.-height rect) 2)) (/ (.-innerHeight js/window) 2))]
           (swap! state update-in [:inventory reward-emoji] inc)
-          (animate-item! cx cy reward-emoji nil))
+          (spawn-particles! px py)
+          (animate-item! px py reward-emoji nil))
         (spawn-ghost! (str "catch-" (name game-id)) reward-emoji))
       (swap! state assoc-in [:cooldowns game-id] {:current cooldown-time :max cooldown-time}))))
 
@@ -231,11 +259,8 @@
                                    (update-in [:inventory emoji] (fnil inc 0))
                                    (assoc-in [:slots emoji] (vec (repeat (count curr-slots) nil)))
                                    (assoc-in [:cooldowns emoji] {:current cooldown-time :max cooldown-time}))))
-                      (let [slots-el (js/document.getElementById (str "slots-" emoji))
-                            s-rect (when slots-el (.getBoundingClientRect slots-el))
-                            sx (if s-rect (+ (.-left s-rect) (/ (.-width s-rect) 2)) cx)
-                            sy (if s-rect (+ (.-top s-rect) (/ (.-height s-rect) 2)) cy)]
-                        (animate-item! sx sy emoji nil)))
+                      (spawn-particles! ex ey)
+                      (animate-item! ex ey emoji nil))
                     (do
                       (set-slot-timeout emoji)
                       (swap! state assoc-in [:slots emoji] new-slots))))))))))))
@@ -379,8 +404,23 @@
                     :top (str (:y ghost) "px")}}
       [:div {:class "ghost-emoji"} [e (:emoji ghost)]]])])
 
+(defn component:particles []
+  [:div {:class "particle-layer"}
+   (for [[id p] (:particles @state)]
+     ^{:key id}
+     [:div {:class "particle-wrapper"
+            :style {:left (str (:x p) "px")
+                    :top (str (:y p) "px")
+                    "--particle-jump" (:jump p)
+                    "--particle-direction" (:direction p)
+                    "--particle-spin" (:spin p)
+                    "--particle-size" (:size p)
+                    "--particle-delay" (str (:delay p) "s")}}
+      [:div {:class "particle-inner"} [e (:emoji p)]]])])
+
 (defn component:app [_state]
   [:<>
+   [component:particles]
    [component:ghosts]
    [component:flying-items]
    [component:flying-coins]

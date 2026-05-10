@@ -60,18 +60,6 @@
 (defn e [c]
   [:span {:class "emoji"} c])
 
-(defn start-gathering [id progress-key speed]
-  (when-not (or @hold-interval (get-in @state [:cooldowns id]))
-    (reset! hold-interval
-            (js/setInterval
-             (fn []
-               (swap! state update progress-key
-                      (fn [p]
-                        (if (>= p 100)
-                          100
-                          (+ p speed)))))
-             20))))
-
 (defn get-event-coords [ev fallback-id]
   (let [cx (when ev
              (or (.-clientX ev)
@@ -137,26 +125,39 @@
        (spawn-cloud! cx target-y))
      1200)))
 
-(defn stop-gathering [_ev id progress-key reward-emoji cooldown-time]
+(defn start-gathering [id progress-key reward-emoji speed cooldown-time]
+  (when-not (or @hold-interval (get-in @state [:cooldowns id]))
+    (reset! hold-interval
+            (js/setInterval
+             (fn []
+               (let [new-p (+ (get @state progress-key) speed)]
+                 (if (>= new-p 100)
+                   (do
+                     (js/clearInterval @hold-interval)
+                     (reset! hold-interval nil)
+                     (swap! state assoc progress-key 0)
+                     (let [el (js/document.getElementById (str "progress-" id))
+                           rect (when el (.getBoundingClientRect el))
+                           px (if rect (.-right rect) (/ (.-innerWidth js/window) 2))
+                           py (if rect (+ (.-top rect) (/ (.-height rect) 2)) (/ (.-innerHeight js/window) 2))
+                           em-el (js/document.getElementById (str "emoji-" id))
+                           em-rect (when em-el (.getBoundingClientRect em-el))
+                           emx (if em-rect (+ (.-left em-rect) (/ (.-width em-rect) 2)) px)
+                           emy (if em-rect (+ (.-top em-rect) (/ (.-height em-rect) 2)) py)]
+                       (swap! state update-in [:inventory reward-emoji] inc)
+                       (swap! state assoc-in [:cooldowns id] {:current cooldown-time :max cooldown-time})
+                       (spawn-star! px py)
+                       (animate-item! emx emy reward-emoji nil)))
+                   (swap! state assoc progress-key new-p))))
+             20))))
+
+(defn stop-gathering [_ev id progress-key reward-emoji]
   (when @hold-interval
     (js/clearInterval @hold-interval)
     (reset! hold-interval nil))
   (let [progress (get @state progress-key)]
     (when (> progress 0)
-      (if (>= progress 100)
-        (let [el (js/document.getElementById (str "progress-" id))
-              rect (when el (.getBoundingClientRect el))
-              px (if rect (.-right rect) (/ (.-innerWidth js/window) 2))
-              py (if rect (+ (.-top rect) (/ (.-height rect) 2)) (/ (.-innerHeight js/window) 2))
-              em-el (js/document.getElementById (str "emoji-" id))
-              em-rect (when em-el (.getBoundingClientRect em-el))
-              emx (if em-rect (+ (.-left em-rect) (/ (.-width em-rect) 2)) px)
-              emy (if em-rect (+ (.-top em-rect) (/ (.-height em-rect) 2)) py)]
-          (swap! state update-in [:inventory reward-emoji] inc)
-          (swap! state assoc-in [:cooldowns id] {:current cooldown-time :max cooldown-time})
-          (spawn-star! px py)
-          (animate-item! emx emy reward-emoji nil))
-        (spawn-ghost! (str "progress-" id) reward-emoji))))
+      (spawn-ghost! (str "progress-" id) reward-emoji)))
   (swap! state assoc progress-key 0))
 
 (defn handle-catch [_ev game-id reward-emoji cooldown-time]
@@ -385,12 +386,12 @@
        [:div {:class "progress-bar" :style {:width (str (get @state progress-key) "%")}}]]
       [:div {:style {:cursor "pointer"}
              :id (str "emoji-" id)
-             :on-mouse-down #(start-gathering id progress-key speed)
-             :on-mouse-up #(stop-gathering % id progress-key reward-emoji cooldown-time)
-             :on-mouse-leave #(stop-gathering % id progress-key reward-emoji cooldown-time)
-             :on-touch-start (fn [ev] (.preventDefault ev) (start-gathering id progress-key speed))
-             :on-touch-end #(stop-gathering % id progress-key reward-emoji cooldown-time)}
-       [e (if (>= (get @state progress-key) 100) reward-emoji base-emoji)]]])])
+             :on-mouse-down #(start-gathering id progress-key reward-emoji speed cooldown-time)
+             :on-mouse-up #(stop-gathering % id progress-key reward-emoji)
+             :on-mouse-leave #(stop-gathering % id progress-key reward-emoji)
+             :on-touch-start (fn [ev] (.preventDefault ev) (start-gathering id progress-key reward-emoji speed cooldown-time))
+             :on-touch-end #(stop-gathering % id progress-key reward-emoji)}
+       [e base-emoji]]])])
 
 (defn component:flying-coins []
   [:div {:class "flying-coins-layer"}
